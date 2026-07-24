@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: ""
+      target_sublevel:
+        description: "Target Sublevel (e.g., 197, 206, or All)"
+        required: false
+        type: string
+        default: "All"
 
 jobs:
   generate-matrix:
@@ -45,12 +50,14 @@ jobs:
           # Build { "include": [ {android_version:..., kernel_version:..., sublevel:..., os_patch_level:..., variant: ...}, ... ] }
           # Always include Normal, and add any explicit per-item variant from the config.
           FINAL=$(jq -cn \
-            --argjson cfg "$CONFIG_JSON" '
+            --argjson cfg "$CONFIG_JSON" \
+            --arg target_sublevel "${{ inputs.target_sublevel }}" '
             ($cfg.version | split("-")) as $version_parts
             | {
               include: (
                 [
                   $cfg.include[] as $item
+                  | select($target_sublevel == "All" or ($item.sublevel | tostring) == $target_sublevel)
                   | {
                       version: $cfg.version,
                       android_version: $version_parts[0],
@@ -62,6 +69,7 @@ jobs:
                 ]
                 + [
                   $cfg.include[] as $item
+                  | select($target_sublevel == "All" or ($item.sublevel | tostring) == $target_sublevel)
                   | select($item.variant != null)
                   | {
                       version: $cfg.version,
