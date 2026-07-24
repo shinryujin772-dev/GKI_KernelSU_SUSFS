@@ -32,14 +32,17 @@ runs:
         SUSFS_BRANCH="gki-${{ inputs.version }}"
         SUSFS_REPO="https://gitlab.com/simonpunk/susfs4ksu.git"        
 
-        echo "Preparing SUSFS for branch: $SUSFS_BRANCH"
-        echo "Cloning latest from $SUSFS_BRANCH..."
-        git clone "$SUSFS_REPO" -b "$SUSFS_BRANCH" susfs4ksu
+        echo "Preparing SUSFS repository..."
+        git clone "$SUSFS_REPO" susfs4ksu
+        cd susfs4ksu
 
         if [ -n "${{ inputs.susfs_commit }}" ]; then
-          echo "Checking out SUSFS commit: ${{ inputs.susfs_commit }}"
-          cd ${{ github.workspace }}/susfs4ksu
+          echo "Checking out specific SUSFS commit: ${{ inputs.susfs_commit }}"
+          git fetch origin "${{ inputs.susfs_commit }}" || true
           git checkout "${{ inputs.susfs_commit }}"
+        else
+          echo "Checking out SUSFS branch: $SUSFS_BRANCH"
+          git checkout "$SUSFS_BRANCH"
         fi
 
     - name: Enable Kernel Configs
@@ -57,14 +60,22 @@ runs:
           CONFIG_KSU_SUSFS_OPEN_REDIRECT=y
           CONFIG_KSU_SUSFS_SUS_MAP=y
 
-    - name: Apply Kernel SUSFS Patches
+    - name: Copy Kernel SUSFS Files
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
-        # Apply base SUSFS patches
-        cp "${{ github.workspace }}/susfs4ksu/kernel_patches/fs/"* "${{ github.workspace }}/kernel/common/fs/"
-        cp "${{ github.workspace }}/susfs4ksu/kernel_patches/include/linux/"* "${{ github.workspace }}/kernel/common/include/linux/"
-        cp ${{ github.workspace }}/susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ inputs.version }}.patch ./
+        set -euo pipefail
+        cp -f "${{ github.workspace }}/susfs4ksu/kernel_patches/fs/"* "${{ github.workspace }}/kernel/common/fs/" 2>/dev/null || true
+        cp -f "${{ github.workspace }}/susfs4ksu/kernel_patches/include/linux/"* "${{ github.workspace }}/kernel/common/include/linux/" 2>/dev/null || true
+        
+        PATCH_FILE=$(find "${{ github.workspace }}/susfs4ksu/kernel_patches/" -maxdepth 1 -name "50_add_susfs_*.patch" | head -n 1)
+        if [ -n "$PATCH_FILE" ] && [ -f "$PATCH_FILE" ]; then
+          echo "Found SUSFS patch file: $PATCH_FILE"
+          cp "$PATCH_FILE" ./50_add_susfs_in_gki.patch
+        else
+          echo "ERROR: Could not find any 50_add_susfs_*.patch file in commit!"
+          exit 1
+        fi
 
     - name: Apply Android 12 5.10 Fake Patches
       shell: bash
@@ -102,8 +113,6 @@ runs:
       run: |
         echo "Applying Android 13 5.15 SUSFS fixes"
         if [ "${{ inputs.sublevel }}" -le "41" ]; then
-          #echo "Applying base.c Android 13 5.15 Fake Patch"
-          #sed -i 's/^int this_len = min_t(int, count, PAGE_SIZE);$/size_t this_len = min_t(size_t, count, PAGE_SIZE);/' fs/proc/base.c
           echo "Applying namespace.c Android 13 5.15 SUSFS fixes"
           sed -i '/^#include <linux\/shmem_fs.h>$/a #include <linux/mnt_idmapping.h>' fs/namespace.c
           echo "Applying open.c Android 13 5.15 Fake Patch"
@@ -156,7 +165,6 @@ runs:
                   $l[$i] = "\t\t\t\t" . $l[$i];
                   splice(@l, $i + 1, 0, "\t\t\t}");
 
-                  # add { to the if line above
                   for ($j = $i; $j >= 0; $j--) {
                       if ($l[$j] =~ /if\s*\(vma->vm_end > last_vma_end\)/) {
                           $l[$j] =~ s/\)\s*$/) {/;
@@ -198,7 +206,9 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
-        patch -p1 < 50_add_susfs_in_gki-${{ inputs.version }}.patch
+        set -euo pipefail
+        echo "Applying main SUSFS patch..."
+        patch -p1 < 50_add_susfs_in_gki.patch
 
     - name: Revert Android 12 5.10 Fake Patches
       shell: bash
@@ -234,8 +244,6 @@ runs:
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         if [ "${{ inputs.sublevel }}" -le "41" ]; then
-          #echo "Reverting base.c Android 13 5.15 Fake Patch"
-          #sed -i 's/^size_t this_len = min_t(size_t, count, PAGE_SIZE);$/int this_len = min_t(int, count, PAGE_SIZE);/' fs/proc/base.c
           echo "Reverting namespace.c Android 13 5.15 Fake Patch"
           sed -i '/#include <linux\/mnt_idmapping.h>$/d' fs/namespace.c
           echo "Reverting open.c Android 13 5.15 Fake Patch"
@@ -244,8 +252,8 @@ runs:
           perl -i -pe 's/^(\s+if \(inode\) \{)/$1\n\t\t\/\*\n\t\t * IN_ALL_EVENTS represents all of the mask bits\n\t\t * that we expose to userspace.  There is at\n\t\t * least one bit (FS_EVENT_ON_CHILD) which is\n\t\t * used only internally to the kernel.\n\t\t *\/\n\t\tu32 mask = mark->mask & IN_ALL_EVENTS;/m' fs/notify/fdinfo.c
           perl -i -pe 's/\binotify_mark_user_mask\(mark\)/mask, mark->ignored_mask/g' fs/notify/fdinfo.c
           perl -i -pe 's/ignored_mask:0/ignored_mask:%x/g' fs/notify/fdinfo.c
-          sed -i 's|i_uid_into_mnt(i_user_ns(&fi->inode), &fi->inode).val|i_uid_into_mnt(\&init_user_ns, \&fi->inode).val|g' fs/susfs.c
-          sed -i 's|i_uid_into_mnt(i_user_ns(inode), inode).val|i_uid_into_mnt(\&init_user_ns, inode).val|g' fs/susfs.c
+          sed -i 's|i_uid_into_mnt(i_user_ns(&fi->inode), &fi->inode).val|i_uid_into_mnt(\&init_user_ns, \&fi->inode).val|g' fs/susfs.c 2>/dev/null || true
+          sed -i 's|i_uid_into_mnt(i_user_ns(inode), inode).val|i_uid_into_mnt(\&init_user_ns, inode).val|g' fs/susfs.c 2>/dev/null || true
         fi
         if [ "${{ inputs.sublevel }}" -ge "197" ]; then
           echo "Reverting namespace.c Android 13 5.15 Fake Patch"
@@ -303,11 +311,11 @@ runs:
           sed -i 's/vma_pages/vma_data_pages/g' fs/proc/task_mmu.c
         fi
 
-    - name: Apply Kernel SUSFS Patches
+    - name: Apply Task MMU Show Pad Fix
       shell: bash
-      if: true
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
+        set -euo pipefail
         SHOW_PAD_FIX=0
         if [[ "${{ inputs.version }}" = "android12-5.10" && "${{ inputs.sublevel }}" -le 209 ]]; then
           SHOW_PAD_FIX=1
