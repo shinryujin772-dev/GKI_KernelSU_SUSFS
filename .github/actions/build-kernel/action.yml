@@ -34,26 +34,16 @@ runs:
           echo "Bypass hack not applied as per input parameter."
         fi
 
-    # 🔽 BAGONG STEP: Dito bubuuhin ang stock-style .scmversion 🔽
     - name: 'Generate Dynamic Stock Version'
       shell: bash
       working-directory: ${{ github.workspace }}/kernel/common
       run: |
         set -euo pipefail
-
-        # 1. Kumuha ng SUBLEVEL nang awtomatiko mula sa Makefile ng kernel
-        SUBLEVEL=$(grep -E '^SUBLEVEL = ' Makefile | awk '{print $3}' || echo "0")
-
-        # 2. Kumuha ng 12-character Git Hash mula sa main workspace repo
+        ANDROID_VER=$(echo "${{ inputs.version }}" | cut -d'-' -f1)
         REAL_GIT_HASH=$(git -C "${{ github.workspace }}" rev-parse --short=12 HEAD 2>/dev/null || echo "000000000000")
-
-        # 3. Bubuuhin ang Stock Version string
-        DYNAMIC_VERSION="-${{ inputs.version }}-${SUBLEVEL}-00001-g${REAL_GIT_HASH}-ab${{ github.run_number }}"
-
+        DYNAMIC_VERSION="-${ANDROID_VER}-8-00019-g${REAL_GIT_HASH}-ab${{ github.run_number }}"
         echo "=== Generated Stock Kernel Version ==="
         echo "$DYNAMIC_VERSION"
-
-        # 4. Isulat sa .scmversion para basahin ng Kbuild / Bazel
         echo "$DYNAMIC_VERSION" > .scmversion
 
     - name: Setup Kernel Configs
