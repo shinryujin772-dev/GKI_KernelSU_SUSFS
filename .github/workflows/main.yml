@@ -28,6 +28,11 @@ on:
           - android15-6.6
           - android16-6.12
         default: All
+      target_sublevel:
+        description: "Target Sublevel (e.g., 197, 206, or All)"
+        type: string
+        required: false
+        default: "All"
       feature_set:
         description: "Feature Set"
         type: choice
@@ -127,6 +132,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android12-5-10 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   build-android13-5-10:
@@ -138,6 +144,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android13-5-10 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   build-android13-5-15:
@@ -149,6 +156,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android13-5-15 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   build-android14-5-15:
@@ -160,6 +168,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android14-5-15 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   build-android14-6-1:
@@ -171,6 +180,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android14-6-1 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   build-android15-6-6:
@@ -182,6 +192,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android15-6-6 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   build-android16-6-12:
@@ -193,6 +204,7 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit_android16-6-12 }}
+      target_sublevel: ${{ inputs.target_sublevel }}
     secrets: inherit
 
   rej:
